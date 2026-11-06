@@ -25,3 +25,13 @@ docker compose up -d --build
 
 `session.session` и `.env` дают полный доступ к аккаунту - не коммитить и не передавать.
 Удаления, случившиеся пока бот выключен, и сообщения, которых нет в базе, восстановить нельзя.
+
+## Railway
+
+Терминала для входа по коду там нет, поэтому сессия передаётся строкой:
+1. Локально (бот при этом должен быть остановлен):
+   ```
+   .venv/bin/python3 -c "from telethon.sync import TelegramClient; from telethon.sessions import StringSession; import os; from dotenv import load_dotenv; load_dotenv(); c = TelegramClient('session', int(os.environ['API_ID']), os.environ['API_HASH']); c.connect(); print(StringSession.save(c.session))"
+   ```
+2. В Railway: переменные `API_ID`, `API_HASH`, `TG_SESSION` (строка из п.1) и volume с mount path `/data` - иначе база теряется при каждом редеплое.
+3. Одна сессия - один запущенный бот: локально и в Railway одновременно не запускать, Telegram отзовёт сессию (`AUTH_KEY_DUPLICATED`).

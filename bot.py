@@ -15,10 +15,12 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from telethon import TelegramClient, events, utils
+from telethon.sessions import StringSession
 
 load_dotenv()
 # всё, что нельзя терять и отдавать (сессия, база, медиа), - в DATA_DIR
 BASE = os.getenv("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))
+os.makedirs(BASE, exist_ok=True)
 DB_PATH = os.path.join(BASE, "archive.db")
 MEDIA_DIR = os.path.join(BASE, "media")
 MEDIA_MAX_MB = float(os.getenv("MEDIA_MAX_MB", "20"))
@@ -178,11 +180,20 @@ async def backfill(client, db, me_id, limit):
 
 
 async def run():
+    # на хостинге (Railway) нет терминала для входа по коду - сессия берётся из
+    # переменной TG_SESSION (строка из StringSession), иначе - файл session.session
+    session = os.getenv("TG_SESSION")
     client = TelegramClient(
-        os.path.join(BASE, "session"), int(os.environ["API_ID"]), os.environ["API_HASH"]
+        StringSession(session) if session else os.path.join(BASE, "session"),
+        int(os.environ["API_ID"]), os.environ["API_HASH"],
     )
     db = db_connect()
-    await client.start()
+    if session:
+        await client.connect()
+        if not await client.is_user_authorized():
+            raise SystemExit("TG_SESSION недействительна - сгенерируй заново (см. README)")
+    else:
+        await client.start()
     me = await client.get_me()
     print(f"вошёл как {utils.get_display_name(me)}, слушаю...")
 

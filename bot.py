@@ -22,8 +22,6 @@ load_dotenv()
 BASE = os.getenv("DATA_DIR") or os.path.dirname(os.path.abspath(__file__))
 os.makedirs(BASE, exist_ok=True)
 DB_PATH = os.path.join(BASE, "archive.db")
-MEDIA_DIR = os.path.join(BASE, "media")
-MEDIA_MAX_MB = float(os.getenv("MEDIA_MAX_MB", "20"))
 # сколько старых сообщений из каждой лички выкачать при первом запуске
 PRIVATE_HISTORY = int(os.getenv("PRIVATE_HISTORY", "5000"))
 
@@ -114,19 +112,10 @@ def mark_deleted(db, chat_id, msg_ids):
     return rows
 
 
-async def message_row(msg, download_media=True):
+async def message_row(msg):
+    """Только текст: картинки, видео и прочие медиа не скачиваются."""
     chat = await msg.get_chat()
     sender = await msg.get_sender()
-    media_path = None
-    if download_media and msg.media:
-        size = getattr(msg.file, "size", None) or 0
-        if size <= MEDIA_MAX_MB * 1024 * 1024:
-            folder = os.path.join(MEDIA_DIR, str(msg.chat_id))
-            os.makedirs(folder, exist_ok=True)
-            try:
-                media_path = await msg.download_media(file=os.path.join(folder, f"{msg.id}_"))
-            except Exception as e:  # медиа может быть недоступно (истекло, защищено)
-                print(f"не скачал медиа {msg.chat_id}/{msg.id}: {e}")
     return {
         "chat_id": msg.chat_id,
         "msg_id": msg.id,
@@ -137,7 +126,7 @@ async def message_row(msg, download_media=True):
         "outgoing": int(msg.out),
         "date": msg.date.isoformat() if msg.date else None,
         "text": msg.raw_text or "",
-        "media_path": media_path,
+        "media_path": None,
     }
 
 
@@ -171,7 +160,7 @@ async def backfill(client, db, me_id, limit):
         n = 0
         async for msg in client.iter_messages(dialog, limit=None if last else limit,
                                               min_id=last or 0):
-            save_message(db, await message_row(msg, download_media=False))
+            save_message(db, await message_row(msg))
             n += 1
         db.execute("INSERT OR IGNORE INTO backfilled VALUES (?)", (dialog.id,))
         db.commit()

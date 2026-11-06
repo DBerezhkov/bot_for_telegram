@@ -178,6 +178,10 @@ async def run():
     )
     db = db_connect()
     if session:
+        # при редеплое Railway старый контейнер живёт ещё несколько секунд; если
+        # новый подключится сразу, Telegram видит ключ с двух IP и навсегда его
+        # отзывает (AuthKeyDuplicatedError) - ждём, пока старый остановится
+        await asyncio.sleep(int(os.getenv("STARTUP_DELAY", "0")))
         await client.connect()
         if not await client.is_user_authorized():
             raise SystemExit("TG_SESSION недействительна - сгенерируй заново (см. README)")
